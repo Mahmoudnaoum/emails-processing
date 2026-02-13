@@ -1,0 +1,15 @@
+# OAuth secrets – do not commit
+credentials.json
+credentials-1.json
+token.json
+token_remote.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+
+# Optional: uncomment if you don't want to commit sample output
+# latest_100_metadata.json

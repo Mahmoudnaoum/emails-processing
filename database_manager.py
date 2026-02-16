@@ -65,7 +65,9 @@ class DatabaseManager:
                 # Split by semicolons and execute each statement
                 statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
                 for statement in statements:
-                    if statement:
+                    # Skip comments and empty statements
+                    if statement and not statement.strip().startswith('--'):
+                        logger.debug(f"Executing SQL: {statement}")
                         cursor.execute(statement)
                 
                 conn.commit()

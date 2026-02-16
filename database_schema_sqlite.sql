@@ -68,7 +68,7 @@ CREATE TABLE interactions (
     subject TEXT NOT NULL,
     interaction_date DATE NOT NULL,
     interaction_type TEXT DEFAULT 'email', -- email, meeting, call, etc.
-    summary TEXT NOT NULL, -- LLM-generated summary of the interaction
+    summary TEXT NOT NULL, -- LLM-generated summary of interaction
     full_content TEXT, -- Full email content for reference
     participant_count INTEGER DEFAULT 2, -- Number of people involved
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -130,36 +130,45 @@ CREATE INDEX idx_email_processing_status_user_processed ON email_processing_stat
 
 -- Insert some default expertise areas
 INSERT INTO expertise_areas (name, description) VALUES
-('hiring', 'Recruitment and talent acquisition expertise'),
-('growth', 'Business growth and scaling expertise'),
-('strategy', 'Strategic planning and business strategy'),
-('technology', 'Technical expertise and software development'),
-('marketing', 'Marketing and customer acquisition'),
-('finance', 'Financial planning and investment'),
-('operations', 'Business operations and management'),
-('sales', 'Sales and business development'),
-('product', 'Product development and management'),
-('leadership', 'Leadership and team management');
+("hiring", "Recruitment and talent acquisition expertise");
+INSERT INTO expertise_areas (name, description) VALUES
+("growth", "Business growth and scaling expertise");
+INSERT INTO expertise_areas (name, description) VALUES
+("strategy", "Strategic planning and business strategy");
+INSERT INTO expertise_areas (name, description) VALUES
+("technology", "Technical expertise and software development");
+INSERT INTO expertise_areas (name, description) VALUES
+("marketing", "Marketing and customer acquisition");
+INSERT INTO expertise_areas (name, description) VALUES
+("finance", "Financial planning and investment");
+INSERT INTO expertise_areas (name, description) VALUES
+("operations", "Business operations and management");
+INSERT INTO expertise_areas (name, description) VALUES
+("sales", "Sales and business development");
+INSERT INTO expertise_areas (name, description) VALUES
+("product", "Product development and management");
+INSERT INTO expertise_areas (name, description) VALUES
+("leadership", "Leadership and team management");
 
 -- Create view for easy querying of a person's relationships
-CREATE VIEW person_relationships AS
-SELECT 
-    p1.id as person_id,
-    p1.name as person_name,
-    p1.email as person_email,
-    p2.id as related_person_id,
-    p2.name as related_person_name,
-    p2.email as related_person_email,
-    c.name as related_company,
-    COUNT(i.id) as interaction_count,
-    MAX(i.interaction_date) as last_interaction_date,
-    GROUP_CONCAT(i.subject, '; ') as recent_subjects
-FROM people p1
-JOIN interaction_participants ip1 ON p1.id = ip1.person_id
-JOIN interactions i ON ip1.interaction_id = i.id
-JOIN interaction_participants ip2 ON i.id = ip2.interaction_id AND ip2.person_id != p1.id
-JOIN people p2 ON ip2.person_id = p2.id
-LEFT JOIN companies c ON p2.company_id = c.id
-WHERE p1.is_primary_user = 1
-GROUP BY p1.id, p1.name, p1.email, p2.id, p2.name, p2.email, c.name
-ORDER BY last_interaction_date DESC;
+-- CREATE VIEW person_relationships AS
+-- SELECT
+--     p1.id as person_id,
+--     p1.name as person_name,
+--     p1.email as person_email,
+--     p2.id as related_person_id,
+--     p2.name as related_person_name,
+--     p2.email as related_person_email,
+--     c.name as related_company,
+--     COUNT(i.id) as interaction_count,
+--     MAX(i.interaction_date) as last_interaction_date,
+--     GROUP_CONCAT(i.subject, '; ') as recent_subjects
+-- FROM people p1
+-- JOIN interaction_participants ip1 ON p1.id = ip1.person_id
+-- JOIN interactions i ON ip1.interaction_id = i.id
+-- JOIN interaction_participants ip2 ON i.id = ip2.interaction_id AND ip2.person_id != p1.id
+-- JOIN people p2 ON ip2.person_id = p2.id
+-- LEFT JOIN companies c ON p2.company_id = c.id
+-- WHERE p1.is_primary_user = 1
+-- GROUP BY p1.id, p1.name, p1.email, p2.id, p2.name, p2.email, c.name
+-- ORDER BY last_interaction_date DESC;

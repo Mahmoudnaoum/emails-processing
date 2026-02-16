@@ -1,0 +1,45 @@
+# Core dependencies for email relationship analysis system (Simplified for Windows)
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+psycopg2-binary==2.9.9  # PostgreSQL adapter
+# sqlite3 is built-in with Python, no installation needed
+
+# Email processing
+email-validator==2.1.0  # Email validation
+python-dateutil==2.8.2  # Date parsing
+
+# Data processing
+pandas==2.1.4
+numpy==1.26.4  # Use pre-compiled wheel
+
+# HTTP client for API calls
+httpx==0.25.2
+requests==2.31.0
+
+# Pydantic for data validation
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# Logging and monitoring
+structlog==23.2.0
+
+# CORS support
+python-multipart==0.0.6
+
+# Environment variables
+python-dotenv==1.0.0
+
+# JSON handling
+orjson==3.9.10  # Faster JSON processing
+
+# Async support
+aiofiles==23.2.1
+
+# Optional LLM clients (uncomment what you need)
+# openai==1.6.1  # OpenAI API
+# anthropic==0.8.1  # Anthropic Claude API
+# google-generativeai==0.3.2  # Google Gemini API

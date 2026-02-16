@@ -6,7 +6,7 @@ uvicorn[standard]==0.24.0
 
 # Database
 psycopg2-binary==2.9.9  # PostgreSQL adapter
-sqlite3  # Built-in with Python
+# sqlite3 is built-in with Python, no installation needed
 
 # Email processing
 email-validator==2.1.0  # Email validation

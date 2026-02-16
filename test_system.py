@@ -28,7 +28,7 @@ def test_email_processing():
     
     # Load sample emails
     try:
-        with open('last_1000_emails_full.json', 'r') as f:
+        with open('last_1000_emails_full.json', 'r', encoding='utf-8') as f:
             emails = json.load(f)
     except FileNotFoundError:
         logger.error("Sample emails file not found")

@@ -11,5 +11,11 @@ __pycache__/
 .env
 .env.local
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # Optional: uncomment if you don't want to commit sample output
 # latest_100_metadata.json
+# last_1000_emails_full.json

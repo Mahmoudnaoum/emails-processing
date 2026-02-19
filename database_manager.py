@@ -62,13 +62,8 @@ class DatabaseManager:
                 with open(schema_file, 'r') as f:
                     schema_sql = f.read()
                 
-                # Split by semicolons and execute each statement
-                statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
-                for statement in statements:
-                    # Skip comments and empty statements
-                    if statement and not statement.strip().startswith('--'):
-                        logger.debug(f"Executing SQL: {statement}")
-                        cursor.execute(statement)
+                # Execute entire schema at once using executescript
+                cursor.executescript(schema_sql)
                 
                 conn.commit()
                 logger.info("Database initialized successfully")
@@ -132,9 +127,9 @@ class DatabaseManager:
                 
                 # Try to get existing company
                 if self.db_type == 'sqlite':
-                    cursor.execute("SELECT id FROM companies WHERE domain = ?", (domain,))
+                    cursor.execute("SELECT id FROM demo_companies WHERE domain = ?", (domain,))
                 else:
-                    cursor.execute("SELECT id FROM companies WHERE domain = %s", (domain,))
+                    cursor.execute("SELECT id FROM demo_companies WHERE domain = %s", (domain,))
                 
                 row = cursor.fetchone()
                 if row:
@@ -143,14 +138,14 @@ class DatabaseManager:
                 # Create new company
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        INSERT INTO companies (name, domain, description) 
+                        INSERT INTO demo_companies (name, domain, description)
                         VALUES (?, ?, ?)
                     """, (name, domain, description))
                     company_id = cursor.lastrowid
                 else:
                     cursor.execute("""
-                        INSERT INTO companies (name, domain, description) 
-                        VALUES (%s, %s, %s) 
+                        INSERT INTO demo_companies (name, domain, description)
+                        VALUES (%s, %s, %s)
                         RETURNING id
                     """, (name, domain, description))
                     company_id = cursor.fetchone()[0]
@@ -163,8 +158,8 @@ class DatabaseManager:
             logger.error(f"Failed to create/get company {name}: {str(e)}")
             return None
     
-    def create_or_get_person(self, user_id: int, email: str, name: str = None, 
-                           company_id: int = None, role: str = None, 
+    def create_or_get_person(self, user_id: int, email: str, name: str = None,
+                           company_id: int = None, role: str = None,
                            is_primary_user: bool = False) -> int:
         """Create or get a person"""
         try:
@@ -174,12 +169,12 @@ class DatabaseManager:
                 # Try to get existing person
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        SELECT id FROM people 
+                        SELECT id FROM demo_people
                         WHERE user_id = ? AND email = ?
                     """, (user_id, email))
                 else:
                     cursor.execute("""
-                        SELECT id FROM people 
+                        SELECT id FROM demo_people
                         WHERE user_id = %s AND email = %s
                     """, (user_id, email))
                 
@@ -187,19 +182,19 @@ class DatabaseManager:
                 if row:
                     return row[0]
                 
-                # Create new person
+                # Create new person (simplified: only user_id, email, name, company_id)
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        INSERT INTO people (user_id, email, name, company_id, role, is_primary_user) 
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (user_id, email, name, company_id, role, is_primary_user))
+                        INSERT INTO demo_people (user_id, email, name, company_id)
+                        VALUES (?, ?, ?, ?)
+                    """, (user_id, email, name, company_id))
                     person_id = cursor.lastrowid
                 else:
                     cursor.execute("""
-                        INSERT INTO people (user_id, email, name, company_id, role, is_primary_user) 
-                        VALUES (%s, %s, %s, %s, %s, %s) 
+                        INSERT INTO demo_people (user_id, email, name, company_id)
+                        VALUES (%s, %s, %s, %s)
                         RETURNING id
-                    """, (user_id, email, name, company_id, role, is_primary_user))
+                    """, (user_id, email, name, company_id))
                     person_id = cursor.fetchone()[0]
                 
                 conn.commit()
@@ -210,7 +205,7 @@ class DatabaseManager:
             logger.error(f"Failed to create/get person {email}: {str(e)}")
             return None
     
-    def create_interaction(self, user_id: int, email_id: str, thread_id: str, 
+    def create_interaction(self, user_id: int, email_id: str, thread_id: str,
                           subject: str, interaction_date: date, summary: str,
                           full_content: str = None, interaction_type: str = 'email') -> int:
         """Create an interaction"""
@@ -218,24 +213,21 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Simplified: only user_id, email_id, thread_id, subject, summary, date
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        INSERT INTO interactions 
-                        (user_id, email_id, thread_id, subject, interaction_date, 
-                         summary, full_content, interaction_type) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (user_id, email_id, thread_id, subject, interaction_date, 
-                          summary, full_content, interaction_type))
+                        INSERT INTO demo_interactions
+                        (user_id, email_id, thread_id, subject, summary, date)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (user_id, email_id, thread_id, subject, summary, interaction_date))
                     interaction_id = cursor.lastrowid
                 else:
                     cursor.execute("""
-                        INSERT INTO interactions 
-                        (user_id, email_id, thread_id, subject, interaction_date, 
-                         summary, full_content, interaction_type) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) 
+                        INSERT INTO demo_interactions
+                        (user_id, email_id, thread_id, subject, summary, date)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         RETURNING id
-                    """, (user_id, email_id, thread_id, subject, interaction_date, 
-                          summary, full_content, interaction_type))
+                    """, (user_id, email_id, thread_id, subject, summary, interaction_date))
                     interaction_id = cursor.fetchone()[0]
                 
                 conn.commit()
@@ -246,7 +238,7 @@ class DatabaseManager:
             logger.error(f"Failed to create interaction {email_id}: {str(e)}")
             return None
     
-    def add_interaction_participant(self, interaction_id: int, person_id: int, 
+    def add_interaction_participant(self, interaction_id: int, person_id: int,
                                   role_in_interaction: str, is_expert: bool = False,
                                   expertise_area_id: int = None) -> bool:
         """Add a participant to an interaction"""
@@ -254,22 +246,20 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Simplified: only interaction_id and person_id
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        INSERT OR REPLACE INTO interaction_participants 
-                        (interaction_id, person_id, role_in_interaction, is_expert, expertise_area_id) 
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (interaction_id, person_id, role_in_interaction, is_expert, expertise_area_id))
+                        INSERT OR REPLACE INTO demo_interaction_participants
+                        (interaction_id, person_id)
+                        VALUES (?, ?)
+                    """, (interaction_id, person_id))
                 else:
                     cursor.execute("""
-                        INSERT INTO interaction_participants 
-                        (interaction_id, person_id, role_in_interaction, is_expert, expertise_area_id) 
-                        VALUES (%s, %s, %s, %s, %s) 
-                        ON CONFLICT (interaction_id, person_id) DO UPDATE SET
-                        role_in_interaction = EXCLUDED.role_in_interaction,
-                        is_expert = EXCLUDED.is_expert,
-                        expertise_area_id = EXCLUDED.expertise_area_id
-                    """, (interaction_id, person_id, role_in_interaction, is_expert, expertise_area_id))
+                        INSERT INTO demo_interaction_participants
+                        (interaction_id, person_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (interaction_id, person_id) DO NOTHING
+                    """, (interaction_id, person_id))
                 
                 conn.commit()
                 return True
@@ -278,29 +268,28 @@ class DatabaseManager:
             logger.error(f"Failed to add interaction participant: {str(e)}")
             return False
     
-    def add_expertise_to_person(self, person_id: int, expertise_id: int, 
-                               confidence_score: float = 0.5, 
+    def add_expertise_to_person(self, person_id: int, expertise_id: int,
+                               confidence_score: float = 0.5,
                                source_email_id: str = None) -> bool:
         """Add expertise to a person"""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Simplified: only person_id and expertise_id
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        INSERT OR REPLACE INTO person_expertise 
-                        (person_id, expertise_id, confidence_score, source_email_id) 
-                        VALUES (?, ?, ?, ?)
-                    """, (person_id, expertise_id, confidence_score, source_email_id))
+                        INSERT OR REPLACE INTO demo_person_expertise
+                        (person_id, expertise_id)
+                        VALUES (?, ?)
+                    """, (person_id, expertise_id))
                 else:
                     cursor.execute("""
-                        INSERT INTO person_expertise 
-                        (person_id, expertise_id, confidence_score, source_email_id) 
-                        VALUES (%s, %s, %s, %s) 
-                        ON CONFLICT (person_id, expertise_id) DO UPDATE SET
-                        confidence_score = EXCLUDED.confidence_score,
-                        source_email_id = EXCLUDED.source_email_id
-                    """, (person_id, expertise_id, confidence_score, source_email_id))
+                        INSERT INTO demo_person_expertise
+                        (person_id, expertise_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (person_id, expertise_id) DO NOTHING
+                    """, (person_id, expertise_id))
                 
                 conn.commit()
                 return True
@@ -317,9 +306,9 @@ class DatabaseManager:
                 
                 # Try to get existing expertise area
                 if self.db_type == 'sqlite':
-                    cursor.execute("SELECT id FROM expertise_areas WHERE name = ?", (name,))
+                    cursor.execute("SELECT id FROM demo_expertise_areas WHERE name = ?", (name,))
                 else:
-                    cursor.execute("SELECT id FROM expertise_areas WHERE name = %s", (name,))
+                    cursor.execute("SELECT id FROM demo_expertise_areas WHERE name = %s", (name,))
                 
                 row = cursor.fetchone()
                 if row:
@@ -328,14 +317,14 @@ class DatabaseManager:
                 # Create new expertise area
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        INSERT INTO expertise_areas (name, description) 
+                        INSERT INTO demo_expertise_areas (name, description)
                         VALUES (?, ?)
                     """, (name, description))
                     expertise_id = cursor.lastrowid
                 else:
                     cursor.execute("""
-                        INSERT INTO expertise_areas (name, description) 
-                        VALUES (%s, %s) 
+                        INSERT INTO demo_expertise_areas (name, description)
+                        VALUES (%s, %s)
                         RETURNING id
                     """, (name, description))
                     expertise_id = cursor.fetchone()[0]
@@ -356,27 +345,20 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Simplified: only user_id, email_id, thread_id
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        INSERT OR REPLACE INTO email_processing_status 
-                        (user_id, email_id, thread_id, processed, filtered_out, 
-                         filter_reason, error_message) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (user_id, email_id, thread_id, processed, filtered_out, 
-                          filter_reason, error_message))
+                        INSERT OR REPLACE INTO demo_processed_emails
+                        (user_id, email_id, thread_id)
+                        VALUES (?, ?, ?)
+                    """, (user_id, email_id, thread_id))
                 else:
                     cursor.execute("""
-                        INSERT INTO email_processing_status 
-                        (user_id, email_id, thread_id, processed, filtered_out, 
-                         filter_reason, error_message) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s) 
-                        ON CONFLICT (user_id, email_id) DO UPDATE SET
-                        processed = EXCLUDED.processed,
-                        filtered_out = EXCLUDED.filtered_out,
-                        filter_reason = EXCLUDED.filter_reason,
-                        error_message = EXCLUDED.error_message
-                    """, (user_id, email_id, thread_id, processed, filtered_out, 
-                          filter_reason, error_message))
+                        INSERT INTO demo_processed_emails
+                        (user_id, email_id, thread_id)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id, email_id) DO NOTHING
+                    """, (user_id, email_id, thread_id))
                 
                 conn.commit()
                 return True
@@ -391,22 +373,24 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Note: person_relationships view/table doesn't exist in demo schema
+                # This method needs to be updated based on actual demo schema requirements
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        SELECT * FROM person_relationships 
-                        WHERE person_id IN (
-                            SELECT id FROM people WHERE user_id = ? AND is_primary_user = TRUE
-                        )
-                        ORDER BY last_interaction_date DESC
+                        SELECT p.*, c.name as company_name
+                        FROM demo_people p
+                        LEFT JOIN demo_companies c ON p.company_id = c.id
+                        WHERE p.user_id = ?
+                        ORDER BY p.id DESC
                         LIMIT ?
                     """, (user_id, limit))
                 else:
                     cursor.execute("""
-                        SELECT * FROM person_relationships 
-                        WHERE person_id IN (
-                            SELECT id FROM people WHERE user_id = %s AND is_primary_user = TRUE
-                        )
-                        ORDER BY last_interaction_date DESC
+                        SELECT p.*, c.name as company_name
+                        FROM demo_people p
+                        LEFT JOIN demo_companies c ON p.company_id = c.id
+                        WHERE p.user_id = %s
+                        ORDER BY p.id DESC
                         LIMIT %s
                     """, (user_id, limit))
                 
@@ -425,19 +409,17 @@ class DatabaseManager:
                 
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        SELECT pe.*, ea.name as expertise_name, ea.description 
-                        FROM person_expertise pe
-                        JOIN expertise_areas ea ON pe.expertise_id = ea.id
+                        SELECT pe.*, ea.name as expertise_name, ea.description
+                        FROM demo_person_expertise pe
+                        JOIN demo_expertise_areas ea ON pe.expertise_id = ea.id
                         WHERE pe.person_id = ?
-                        ORDER BY pe.confidence_score DESC
                     """, (person_id,))
                 else:
                     cursor.execute("""
-                        SELECT pe.*, ea.name as expertise_name, ea.description 
-                        FROM person_expertise pe
-                        JOIN expertise_areas ea ON pe.expertise_id = ea.id
+                        SELECT pe.*, ea.name as expertise_name, ea.description
+                        FROM demo_person_expertise pe
+                        JOIN demo_expertise_areas ea ON pe.expertise_id = ea.id
                         WHERE pe.person_id = %s
-                        ORDER BY pe.confidence_score DESC
                     """, (person_id,))
                 
                 rows = cursor.fetchall()
@@ -447,7 +429,7 @@ class DatabaseManager:
             logger.error(f"Failed to get person expertise: {str(e)}")
             return []
     
-    def get_interactions_by_date_range(self, user_id: int, start_date: date, 
+    def get_interactions_by_date_range(self, user_id: int, start_date: date,
                                      end_date: date) -> List[Dict]:
         """Get interactions within a date range"""
         try:
@@ -456,15 +438,15 @@ class DatabaseManager:
                 
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        SELECT * FROM interactions 
-                        WHERE user_id = ? AND interaction_date BETWEEN ? AND ?
-                        ORDER BY interaction_date DESC
+                        SELECT * FROM demo_interactions
+                        WHERE user_id = ? AND date BETWEEN ? AND ?
+                        ORDER BY date DESC
                     """, (user_id, start_date, end_date))
                 else:
                     cursor.execute("""
-                        SELECT * FROM interactions 
-                        WHERE user_id = %s AND interaction_date BETWEEN %s AND %s
-                        ORDER BY interaction_date DESC
+                        SELECT * FROM demo_interactions
+                        WHERE user_id = %s AND date BETWEEN %s AND %s
+                        ORDER BY date DESC
                     """, (user_id, start_date, end_date))
                 
                 rows = cursor.fetchall()
@@ -480,24 +462,21 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
+                # Simplified: demo_processed_emails only has user_id, email_id, thread_id
                 if self.db_type == 'sqlite':
                     cursor.execute("""
-                        SELECT 
+                        SELECT
                             COUNT(*) as total_emails,
-                            SUM(CASE WHEN processed = 1 THEN 1 ELSE 0 END) as processed_emails,
-                            SUM(CASE WHEN filtered_out = 1 THEN 1 ELSE 0 END) as filtered_emails,
                             COUNT(DISTINCT thread_id) as unique_threads
-                        FROM email_processing_status 
+                        FROM demo_processed_emails
                         WHERE user_id = ?
                     """, (user_id,))
                 else:
                     cursor.execute("""
-                        SELECT 
+                        SELECT
                             COUNT(*) as total_emails,
-                            SUM(CASE WHEN processed = TRUE THEN 1 ELSE 0 END) as processed_emails,
-                            SUM(CASE WHEN filtered_out = TRUE THEN 1 ELSE 0 END) as filtered_emails,
                             COUNT(DISTINCT thread_id) as unique_threads
-                        FROM email_processing_status 
+                        FROM demo_processed_emails
                         WHERE user_id = %s
                     """, (user_id,))
                 

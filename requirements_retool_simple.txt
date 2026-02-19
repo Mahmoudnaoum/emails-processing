@@ -1,0 +1,17 @@
+# Simplified requirements for Retool integration - No Rust required
+# Install with: pip install -r requirements_retool_simple.txt
+
+# Database - Pre-compiled binary (no compilation required)
+psycopg2-binary==2.9.9
+
+# API
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# Email processing
+email-validator==2.1.0
+
+# Optional: LLM integration (uncomment if needed)
+# openai==1.10.0
+# anthropic==0.18.1

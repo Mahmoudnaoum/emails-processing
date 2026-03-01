@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def create_demo_tables():
-    """Create demo tables in the database"""
+    """Create simple demo tables in the database for raw emails + threads"""
     db = RetoolDBManager()
     
     if not db.connect():
@@ -18,94 +18,49 @@ def create_demo_tables():
         return
     
     try:
-        # Create demo tables
+        # Much simpler model:
+        # - demo_threads: one row per Gmail thread / conversation
+        # - demo_emails: one row per raw email message (minimal parsing only)
         create_statements = [
-            # Companies table
+            # Threads / conversations
             """
-            CREATE TABLE IF NOT EXISTS demo_companies (
+            CREATE TABLE IF NOT EXISTS demo_threads (
                 id SERIAL PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                domain VARCHAR(255) UNIQUE,
-                description TEXT
-            )
-            """,
-            
-            # People table
-            """
-            CREATE TABLE IF NOT EXISTS demo_people (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                name VARCHAR(255),
-                company_id INTEGER REFERENCES demo_companies(id) ON DELETE SET NULL
-            )
-            """,
-            
-            # Expertise areas table
-            """
-            CREATE TABLE IF NOT EXISTS demo_expertise_areas (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255) UNIQUE NOT NULL,
-                description TEXT
-            )
-            """,
-            
-            # Person-expertise relationship table
-            """
-            CREATE TABLE IF NOT EXISTS demo_person_expertise (
-                person_id INTEGER REFERENCES demo_people(id) ON DELETE CASCADE,
-                expertise_id INTEGER REFERENCES demo_expertise_areas(id) ON DELETE CASCADE,
-                PRIMARY KEY (person_id, expertise_id)
-            )
-            """,
-            
-            # Interactions table
-            """
-            CREATE TABLE IF NOT EXISTS demo_interactions (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                email_id VARCHAR(255) UNIQUE NOT NULL,
-                thread_id VARCHAR(255),
+                thread_id VARCHAR(255) UNIQUE NOT NULL,
                 subject VARCHAR(500),
-                summary TEXT,
-                date TIMESTAMP
+                first_date TIMESTAMP,
+                last_date TIMESTAMP,
+                message_count INTEGER DEFAULT 0
             )
             """,
-            
-            # Interaction participants table
+            # Raw emails
             """
-            CREATE TABLE IF NOT EXISTS demo_interaction_participants (
-                interaction_id INTEGER REFERENCES demo_interactions(id) ON DELETE CASCADE,
-                person_id INTEGER REFERENCES demo_people(id) ON DELETE CASCADE,
-                PRIMARY KEY (interaction_id, person_id)
-            )
-            """,
-            
-            # Processed emails table
-            """
-            CREATE TABLE IF NOT EXISTS demo_processed_emails (
-                user_id INTEGER NOT NULL,
-                email_id VARCHAR(255) NOT NULL,
-                thread_id VARCHAR(255),
-                PRIMARY KEY (user_id, email_id)
+            CREATE TABLE IF NOT EXISTS demo_emails (
+                id SERIAL PRIMARY KEY,
+                gmail_id VARCHAR(255) UNIQUE NOT NULL,
+                thread_id VARCHAR(255) REFERENCES demo_threads(thread_id) ON DELETE CASCADE,
+                from_email VARCHAR(255),
+                to_emails TEXT,
+                cc_emails TEXT,
+                bcc_emails TEXT,
+                subject VARCHAR(500),
+                snippet TEXT,
+                body TEXT,
+                sent_at TIMESTAMP,
+                internal_date BIGINT,
+                raw_json JSONB
             )
             """
         ]
         
-        # Execute each create statement
         for i, statement in enumerate(create_statements, 1):
             print(f"Creating table {i}/{len(create_statements)}...")
             db.execute_query(statement, fetch=False)
         
-        print("\n[SUCCESS] All demo tables created successfully!")
+        print("\n[SUCCESS] Simple demo tables created successfully!")
         print("\nDemo tables created:")
-        print("  - demo_companies")
-        print("  - demo_people")
-        print("  - demo_expertise_areas")
-        print("  - demo_person_expertise")
-        print("  - demo_interactions")
-        print("  - demo_interaction_participants")
-        print("  - demo_processed_emails")
+        print("  - demo_threads")
+        print("  - demo_emails")
         
     except Exception as e:
         print(f"[ERROR] Failed to create demo tables: {e}")

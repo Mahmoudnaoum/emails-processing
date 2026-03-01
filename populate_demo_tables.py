@@ -1,99 +1,127 @@
 """
-Populate demo tables with email data from last_1000_emails_full.json
-Extracts people, companies, and interactions from emails
+Populate simple demo tables with raw email data from last_1000_emails_full.json
+
+New, simpler model:
+- demo_threads: one row per Gmail thread (conversation)
+- demo_emails: one row per raw email, minimal parsing, no AI / people / companies logic
 """
 import json
-from retool_db_manager import RetoolDBManager
 from datetime import datetime
-import re
+from typing import Optional, Dict, Any
+
+from retool_db_manager import RetoolDBManager
 
 
-def extract_domain_from_email(email: str) -> str:
-    """Extract domain from email address"""
-    if '@' not in email:
-        return None
-    return email.split('@')[1].lower()
+def parse_timestamp(internal_date: Optional[str], date_header: Optional[str]) -> Optional[datetime]:
+    """Best-effort conversion of Gmail timestamps to a datetime."""
+    # Prefer internalDate (ms since epoch)
+    if internal_date:
+        try:
+            return datetime.fromtimestamp(int(internal_date) / 1000.0)
+        except Exception:
+            pass
+    # Fallback: try parsing Date header if present
+    if date_header:
+        for fmt in (
+            "%a, %d %b %Y %H:%M:%S %z",
+            "%a, %d %b %Y %H:%M:%S %Z",
+            "%d %b %Y %H:%M:%S %z",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
+        ):
+            try:
+                return datetime.strptime(date_header, fmt)
+            except ValueError:
+                continue
+    return None
 
 
-def extract_name_from_email(email: str) -> str:
-    """Extract name from email address (part before @)"""
-    if '@' not in email:
-        return email
-    return email.split('@')[0].replace('.', ' ').title()
+def upsert_thread(db: RetoolDBManager, email: Dict[str, Any]) -> None:
+    """Ensure a row exists in demo_threads for this email's thread, and update counts/dates."""
+    thread_id = email.get("threadId")
+    if not thread_id:
+        return
+
+    subject = email.get("Subject", "")
+    sent_at = parse_timestamp(email.get("internalDate"), email.get("Date"))
+
+    # Upsert thread row and keep basic aggregates
+    db.execute_query(
+        """
+        INSERT INTO demo_threads (thread_id, subject, first_date, last_date, message_count)
+        VALUES (%s, %s, %s, %s, 1)
+        ON CONFLICT (thread_id) DO UPDATE
+        SET
+            subject = COALESCE(EXCLUDED.subject, demo_threads.subject),
+            first_date = LEAST(COALESCE(demo_threads.first_date, EXCLUDED.first_date),
+                               COALESCE(EXCLUDED.first_date, demo_threads.first_date)),
+            last_date = GREATEST(COALESCE(demo_threads.last_date, EXCLUDED.last_date),
+                                 COALESCE(EXCLUDED.last_date, demo_threads.last_date)),
+            message_count = demo_threads.message_count + 1;
+        """,
+        (
+            thread_id,
+            subject or None,
+            sent_at,
+            sent_at,
+        ),
+        fetch=False,
+    )
 
 
-def filter_newsletter_emails(email: dict) -> bool:
-    """Filter out newsletter and notification emails"""
-    from_email = email.get('From', '')
-    subject = email.get('Subject', '')
-    body = email.get('body', '').lower()
-    
-    # Newsletter patterns to exclude
-    newsletter_patterns = [
-        'unsubscribe', 'newsletter', 'notification', 'alert', 'update',
-        'noreply', 'no-reply', 'donotreply', 'support@', 'info@',
-        'digest', 'weekly', 'daily', 'subscription', 'billing@'
-    ]
-    
-    # Check if any pattern matches
-    for pattern in newsletter_patterns:
-        if pattern in from_email.lower() or pattern in subject.lower() or pattern in body:
-            return True
-    
-    return False
+def insert_email(db: RetoolDBManager, email: Dict[str, Any]) -> None:
+    """Insert a raw email row into demo_emails (no dedup logic beyond gmail_id)."""
+    gmail_id = email.get("id")
+    if not gmail_id:
+        return
 
+    sent_at = parse_timestamp(email.get("internalDate"), email.get("Date"))
 
-def extract_people_from_email(email: dict) -> list:
-    """Extract people from email (from, to, cc, bcc)"""
-    people = []
-    
-    # From field
-    if 'From' in email:
-        from_email = email['From']
-        if from_email and '<' in from_email:
-            # Extract email from angle brackets
-            match = re.search(r'<([^>]+)>', from_email)
-            if match:
-                from_email = match.group(1)
-        if from_email and '@' in from_email:
-            people.append({
-                'email': from_email,
-                'name': extract_name_from_email(from_email)
-            })
-    
-    # To field
-    if 'To' in email:
-        to_field = email['To']
-        if isinstance(to_field, str):
-            to_emails = [to_field]
-        else:
-            to_emails = to_field
-        
-        for to_email in to_emails:
-            if '<' in to_email:
-                # Extract email from angle brackets
-                match = re.search(r'<([^>]+)>', to_email)
-                if match:
-                    to_email = match.group(1)
-            if to_email and '@' in to_email:
-                # Avoid duplicates
-                if not any(p['email'] == to_email for p in people):
-                    people.append({
-                        'email': to_email,
-                        'name': extract_name_from_email(to_email)
-                    })
-    
-    return people
+    db.execute_query(
+        """
+        INSERT INTO demo_emails (
+            gmail_id,
+            thread_id,
+            from_email,
+            to_emails,
+            cc_emails,
+            bcc_emails,
+            subject,
+            snippet,
+            body,
+            sent_at,
+            internal_date,
+            raw_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (gmail_id) DO NOTHING;
+        """,
+        (
+            gmail_id,
+            email.get("threadId"),
+            email.get("From"),
+            email.get("To"),
+            email.get("Cc"),
+            email.get("Bcc"),
+            email.get("Subject"),
+            email.get("snippet"),
+            email.get("body"),
+            sent_at,
+            int(email["internalDate"]) if email.get("internalDate") else None,
+            json.dumps(email),
+        ),
+        fetch=False,
+    )
 
 
 def populate_demo_tables(json_file: str, limit: int = None):
-    """Populate demo tables with email data"""
+    """Populate simple demo tables with raw email data (no AI / people / companies logic)."""
     print("=" * 60)
-    print("Populating Demo Tables from Email Data")
+    print("Populating Simple Demo Tables from Email Data")
     print("=" * 60)
     
     # Load email data
-    with open(json_file, 'r', encoding='utf-8') as f:
+    with open(json_file, "r", encoding="utf-8") as f:
         emails = json.load(f)
     
     # Apply limit if specified
@@ -102,128 +130,47 @@ def populate_demo_tables(json_file: str, limit: int = None):
     
     print(f"\nProcessing {len(emails)} emails...")
     
-    # Initialize database manager
     db = RetoolDBManager()
-    
     if not db.connect():
         print("[ERROR] Failed to connect to database")
         return
     
     try:
-        # Track statistics
         stats = {
-            'processed': 0,
-            'skipped': 0,
-            'companies': 0,
-            'people': 0,
-            'interactions': 0
+            "processed": 0,
+            "threads_touched": set(),
+            "errors": 0,
         }
         
-        # Process each email
         for i, email in enumerate(emails):
             if (i + 1) % 100 == 0:
-                print(f"\nProcessing {i + 1}/{len(emails)} emails...")
+                print(f"Processed {i + 1}/{len(emails)} emails...")
             
-            # Filter out newsletters
-            if filter_newsletter_emails(email):
-                stats['skipped'] += 1
-                continue
-            
-            # Extract people from email
-            people = extract_people_from_email(email)
-            
-            if not people:
-                stats['skipped'] += 1
-                continue
-            
-            # Get or create company
-            from_email = email['From']
-            domain = extract_domain_from_email(from_email)
-            company_id = None
-            
-            if domain:
-                company_id = db.create_or_get_company(
-                    name=domain.title(),
-                    domain=domain,
-                    description=f"Company with domain {domain}",
-                    demo=True
-                )
-                if company_id:
-                    stats['companies'] += 1
-            
-            # Create or get people
-            person_ids = []
-            for person in people:
-                person_id = db.create_or_get_person(
-                    user_id=1,  # Default user ID
-                    email=person['email'],
-                    name=person['name'],
-                    company_id=company_id,
-                    demo=True
-                )
-                if person_id:
-                    person_ids.append(person_id)
-                    stats['people'] += 1
-            
-            if not person_ids:
-                stats['skipped'] += 1
-                continue
-            
-            # Create interaction
-            interaction_id = db.create_interaction(
-                user_id=1,
-                email_id=email.get('id', ''),
-                thread_id=email.get('threadId', ''),
-                subject=email.get('Subject', ''),
-                summary=email.get('snippet', '')[:500] if email.get('snippet') else '',
-                demo=True
-            )
-            
-            if interaction_id:
-                # Add participants
-                for person_id in person_ids:
-                    db.add_interaction_participant(
-                        interaction_id=interaction_id,
-                        person_id=person_id,
-                        demo=True
-                    )
+            try:
+                # 1) Ensure a thread row exists / is updated
+                upsert_thread(db, email)
+                if email.get("threadId"):
+                    stats["threads_touched"].add(email["threadId"])
                 
-                stats['interactions'] += 1
-            
-            # Mark email as processed
-            db.mark_email_processed(
-                user_id=1,
-                email_id=email.get('id', ''),
-                thread_id=email.get('threadId', ''),
-                demo=True
-            )
-            
-            stats['processed'] += 1
+                # 2) Insert raw email row
+                insert_email(db, email)
+                stats["processed"] += 1
+            except Exception as e:
+                print(f"Error processing email {email.get('id')}: {e}")
+                stats["errors"] += 1
         
-        # Print summary
         print("\n" + "=" * 60)
         print("Processing Complete!")
         print("=" * 60)
         print(f"\nSummary:")
-        print(f"  Total emails processed: {stats['processed']}")
-        print(f"  Emails skipped (newsletters): {stats['skipped']}")
-        print(f"  Companies created: {stats['companies']}")
-        print(f"  People created: {stats['people']}")
-        print(f"  Interactions created: {stats['interactions']}")
-        
-        # Get final stats from database
-        final_stats = db.get_stats(demo=True)
-        print(f"\nFinal database stats:")
-        print(f"  Companies: {final_stats.get('companies', 0)}")
-        print(f"  People: {final_stats.get('people', 0)}")
-        print(f"  Interactions: {final_stats.get('interactions', 0)}")
-        print(f"  Expertise areas: {final_stats.get('expertise_areas', 0)}")
-        print(f"  Processed emails: {final_stats.get('processed_emails', 0)}")
-        
-        db.close()
+        print(f"  Total emails attempted: {len(emails)}")
+        print(f"  Emails inserted (unique gmail_id): {stats['processed']}")
+        print(f"  Unique threads touched: {len(stats['threads_touched'])}")
+        print(f"  Errors: {stats['errors']}")
         
     except Exception as e:
         print(f"\n[ERROR] Failed to populate demo tables: {e}")
+    finally:
         db.close()
 
 
